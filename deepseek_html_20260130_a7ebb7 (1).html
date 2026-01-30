@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel智能拆分工具</title>
+    
+    <!-- CDN引入 -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* 自定义玻璃拟态效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-dark {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        }
+        
+        .drop-zone {
+            border: 2px dashed rgba(59, 130, 246, 0.5);
+            transition: all 0.3s ease;
+        }
+        
+        .drop-zone.dragover {
+            border-color: rgba(59, 130, 246, 0.8);
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .gradient-text {
+            background: linear-gradient(to right, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            background: linear-gradient(to right, #667eea, #764ba2);
+            transition: width 0.3s ease;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
+        .pulse {
+            animation: pulse 1.5s infinite;
+        }
+        
+        /* 新年氛围动画样式 */
+        .success-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+        }
+        
+        .firework {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            box-shadow: 
+                0 0 10px 2px #ff0000,
+                0 0 20px 4px #ff9900;
+        }
+        
+        .firework.red {
+            background-color: #ff0000;
+            box-shadow: 
+                0 0 10px 2px #ff0000,
+                0 0 20px 4px #ff9900;
+        }
+        
+        .firework.gold {
+            background-color: #ffd700;
+            box-shadow: 
+                0 0 10px 2px #ffd700,
+                0 0 20px 4px #ff9900;
+        }
+        
+        .firework.green {
+            background-color: #00ff00;
+            box-shadow: 
+                0 0 10px 2px #00ff00,
+                0 0 20px 4px #00cc00;
+        }
+        
+        @keyframes firework-explode {
+            0% { 
+                transform: translate(0, 0) scale(1); 
+                opacity: 1;
+            }
+            100% { 
+                transform: translate(var(--tx), var(--ty)) scale(0); 
+                opacity: 0;
+            }
+        }
+        
+        .success-card {
+            position: relative;
+            z-index: 10;
+            background: linear-gradient(135deg, rgba(255, 0, 0, 0.9), rgba(255, 215, 0, 0.9));
+            border-radius: 20px;
+            padding: 60px 80px;
+            text-align: center;
+            box-shadow: 
+                0 0 50px rgba(255, 0, 0, 0.5),
+                0 0 100px rgba(255, 215, 0, 0.3),
+                inset 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: cardPulse 2s infinite alternate;
+            border: 3px solid #ffd700;
+        }
+        
+        @keyframes cardPulse {
+            0% { 
+                transform: scale(1);
+                box-shadow: 
+                    0 0 50px rgba(255, 0, 0, 0.5),
+                    0 0 100px rgba(255, 215, 0, 0.3),
+                    inset 0 0 20px rgba(255, 255, 255, 0.5);
+            }
+            100% { 
+                transform: scale(1.05);
+                box-shadow: 
+                    0 0 60px rgba(255, 0, 0, 0.7),
+                    0 0 120px rgba(255, 215, 0, 0.5),
+                    inset 0 0 30px rgba(255, 255, 255, 0.7);
+            }
+        }
+        
+        .success-text {
+            font-size: 64px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 
+                0 0 10px #ff0000,
+                0 0 20px #ff9900,
+                0 0 30px #ffd700;
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        
+        .sub-text {
+            font-size: 24px;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+            margin-bottom: 30px;
+        }
+        
+        .new-year-decoration {
+            position: absolute;
+            font-size: 36px;
+            color: #ffd700;
+            animation: rotate 10s linear infinite;
+        }
+        
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .lantern {
+            position: absolute;
+            width: 40px;
+            height: 60px;
+            background: linear-gradient(to bottom, #ff0000, #cc0000);
+            border-radius: 20px 20px 10px 10px;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.7);
+            animation: lanternSwing 3s ease-in-out infinite alternate;
+        }
+        
+        .lantern:before {
+            content: '';
+            position: absolute;
+            top: -10px;
+            left: 10px;
+            width: 20px;
+            height: 10px;
+            background: #ffd700;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .lantern:after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 15px;
+            width: 10px;
+            height: 15px;
+            background: #ffd700;
+            border-radius: 0 0 5px 5px;
+        }
+        
+        @keyframes lanternSwing {
+            0% { transform: translateX(0) rotate(-5deg); }
+            100% { transform: translateX(20px) rotate(5deg); }
+        }
+        
+        .close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            z-index: 100;
+        }
+        
+        .close-button:hover {
+            background: rgba(255, 0, 0, 0.7);
+            transform: scale(1.1);
+        }
+        
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            opacity: 0;
+        }
+        
+        @keyframes confettiFall {
+            0% { 
+                opacity: 1;
+                transform: translateY(-100px) rotate(0deg); 
+            }
+            100% { 
+                opacity: 0;
+                transform: translateY(1000px) rotate(720deg); 
+            }
+        }
+        
+        /* Sheet预览表格样式 */
+        .sheet-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        
+        .sheet-table th {
+            background-color: rgba(30, 41, 59, 0.8);
+            color: #cbd5e1;
+            font-weight: 600;
+            padding: 6px 8px;
+            text-align: left;
+            border: 1px solid rgba(100, 116, 139, 0.5);
+            white-space: nowrap;
+        }
+        
+        .sheet-table td {
+            padding: 6px 8px;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+            color: #e2e8f0;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .sheet-table tr:nth-child(even) {
+            background-color: rgba(30, 41, 59, 0.4);
+        }
+        
+        .sheet-table tr:hover {
+            background-color: rgba(59, 130, 246, 0.2);
+        }
+        
+        .sheet-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .sheet-tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+            background-color: rgba(30, 41, 59, 0.5);
+            border: 1px solid rgba(100, 116, 139, 0.3);
+            color: #cbd5e1;
+        }
+        
+        .sheet-tab:hover {
+            background-color: rgba(59, 130, 246, 0.3);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+        
+        .sheet-tab.active {
+            background-color: rgba(59, 130, 246, 0.7);
+            border-color: rgba(59, 130, 246, 0.9);
+            color: white;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        
+        .preview-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid rgba(100, 116, 139, 0.3);
+            background-color: rgba(15, 23, 42, 0.6);
+        }
+        
+        .preview-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background-color: rgba(30, 41, 59, 0.7);
+            border-bottom: 1px solid rgba(100, 116, 139, 0.3);
+            font-size: 14px;
+            color: #cbd5e1;
+        }
+        
+        .preview-info span {
+            font-weight: 600;
+            color: #60a5fa;
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen p-4 md:p-8">
+    <div id="root" class="max-w-6xl mx-auto"></div>
+    
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+        
+        // 新年成功动画组件
+        function SuccessAnimation({ onClose }) {
+            const [fireworks, setFireworks] = useState([]);
+            const [confetti, setConfetti] = useState([]);
+            const animationRef = useRef(null);
+            
+            // 创建烟花效果
+            useEffect(() => {
+                // 创建初始烟花
+                const initialFireworks = [];
+                for (let i = 0; i < 50; i++) {
+                    initialFireworks.push({
+                        id: i,
+                        x: Math.random() * 100,
+                        y: Math.random() * 100,
+                        color: i % 3 === 0 ? 'red' : (i % 3 === 1 ? 'gold' : 'green'),
+                        tx: (Math.random() - 0.5) * 200,
+                        ty: (Math.random() - 0.5) * 200,
+                        delay: Math.random() * 2
+                    });
+                }
+                setFireworks(initialFireworks);
+                
+                // 创建彩色纸屑
+                const initialConfetti = [];
+                const colors = ['#ff0000', '#ff9900', '#ffff00', '#00ff00', '#0099ff', '#9900ff'];
+                for (let i = 0; i < 200; i++) {
+                    initialConfetti.push({
+                        id: i,
+                        x: Math.random() * 100,
+                        y: -10,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        delay: Math.random() * 5,
+                        duration: 2 + Math.random() * 3
+                    });
+                }
+                setConfetti(initialConfetti);
+                
+                // 5秒后自动关闭
+                const timer = setTimeout(() => {
+                    onClose();
+                }, 5000);
+                
+                return () => clearTimeout(timer);
+            }, [onClose]);
+            
+            // 灯笼位置
+            const lanterns = [
+                { left: '10%', top: '10%' },
+                { left: '85%', top: '15%' },
+                { left: '15%', top: '80%' },
+                { left: '80%', top: '85%' }
+            ];
+            
+            return ReactDOM.createPortal(
+                <div className="success-animation">
+                    {/* 关闭按钮 */}
+                    <div className="close-button" onClick={onClose}>×</div>
+                    
+                    {/* 灯笼装饰 */}
+                    {lanterns.map((pos, idx) => (
+                        <div 
+                            key={`lantern-${idx}`}
+                            className="lantern"
+                            style={{ left: pos.left, top: pos.top }}
+                        />
+                    ))}
+                    
+                    {/* 烟花效果 */}
+                    {fireworks.map(fire => (
+                        <div 
+                            key={fire.id}
+                            className={`firework ${fire.color}`}
+                            style={{
+                                left: `${fire.x}%`,
+                                top: `${fire.y}%`,
+                                '--tx': `${fire.tx}px`,
+                                '--ty': `${fire.ty}px`,
+                                animation: `firework-explode 1s ease-out ${fire.delay}s forwards`
+                            }}
+                        />
+                    ))}
+                    
+                    {/* 彩色纸屑 */}
+                    {confetti.map(conf => (
+                        <div 
+                            key={conf.id}
+                            className="confetti"
+                            style={{
+                                left: `${conf.x}%`,
+                                top: `${conf.y}%`,
+                                backgroundColor: conf.color,
+                                animation: `confettiFall ${conf.duration}s ease-in ${conf.delay}s forwards`
+                            }}
+                        />
+                    ))}
+                    
+                    {/* 新年装饰文字 */}
+                    <div className="new-year-decoration" style={{ top: '20%', left: '5%' }}>🎉</div>
+                    <div className="new-year-decoration" style={{ top: '10%', right: '10%' }}>✨</div>
+                    <div className="new-year-decoration" style={{ bottom: '20%', left: '10%' }}>🧨</div>
+                    <div className="new-year-decoration" style={{ bottom: '15%', right: '5%' }}>🧧</div>
+                    
+                    {/* 成功卡片 */}
+                    <div className="success-card">
+                        <div className="success-text">拆分成功！</div>
+                        <div className="sub-text">Excel文件已拆分完成，请查收下载的文件</div>
+                        <div className="flex justify-center space-x-4 mt-6">
+                            <div className="text-3xl">🎊</div>
+                            <div className="text-3xl">🎇</div>
+                            <div className="text-3xl">🎆</div>
+                            <div className="text-3xl">🧨</div>
+                            <div className="text-3xl">🎁</div>
+                        </div>
+                        <div className="mt-8 text-white text-lg">
+                            祝您新年快乐，工作顺利！
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            );
+        }
+        
+        // Sheet预览组件
+        function SheetPreview({ sheetData, sheetName, rowCount, colCount }) {
+            // 只显示前10行和前10列作为预览
+            const previewRows = Math.min(10, rowCount);
+            const previewCols = Math.min(10, colCount);
+            
+            if (!sheetData || sheetData.length === 0) {
+                return (
+                    <div className="p-8 text-center text-gray-400">
+                        <p>该Sheet没有数据或数据为空</p>
+                    </div>
+                );
+            }
+            
+            // 获取表头
+            const headers = sheetData[0] || [];
+            
+            // 获取预览数据
+            const previewData = sheetData.slice(0, previewRows + 1); // +1 包含表头
+            
+            return (
+                <div className="preview-container">
+                    <div className="preview-info">
+                        <div>
+                            Sheet名称: <span>{sheetName}</span>
+                        </div>
+                        <div>
+                            数据预览: <span>前{previewRows}行 / 前{previewCols}列</span>
+                        </div>
+                        <div>
+                            总数据: <span>{rowCount}行 × {colCount}列</span>
+                        </div>
+                    </div>
+                    
+                    <table className="sheet-table">
+                        <thead>
+                            <tr>
+                                {headers.slice(0, previewCols).map((header, idx) => (
+                                    <th key={idx}>
+                                        {header || `列${idx + 1}`}
+                                    </th>
+                                ))}
+                                {colCount > previewCols && (
+                                    <th>...</th>
+                                )}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {previewData.slice(1).map((row, rowIdx) => (
+                                <tr key={rowIdx}>
+                                    {row.slice(0, previewCols).map((cell, cellIdx) => (
+                                        <td key={cellIdx} title={cell}>
+                                            {cell !== null && cell !== undefined ? cell.toString() : ''}
+                                        </td>
+                                    ))}
+                                    {colCount > previewCols && (
+                                        <td>...</td>
+                                    )}
+                                </tr>
+                            ))}
+                            {rowCount > previewRows && (
+                                <tr>
+                                    <td colSpan={previewCols + (colCount > previewCols ? 1 : 0)} className="text-center text-gray-400">
+                                        ... 还有 {rowCount - previewRows} 行数据未显示
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            );
+        }
+        
+        // 主应用组件
+        function App() {
+            const [file, setFile] = useState(null);
+            const [maxRows, setMaxRows] = useState(1000);
+            const [status, setStatus] = useState('等待上传文件'); // waiting, processing, completed, error
+            const [progress, setProgress] = useState(0);
+            const [resultInfo, setResultInfo] = useState(null);
+            const [isDragging, setIsDragging] = useState(false);
+            const [concurrency, setConcurrency] = useState(10);
+            const [isProcessing, setIsProcessing] = useState(false);
+            const [errorMessage, setErrorMessage] = useState('');
+            const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+            
+            // 新增状态：Sheet相关
+            const [sheets, setSheets] = useState([]); // [{name: 'Sheet1', data: [], rows: 0, cols: 0}, ...]
+            const [selectedSheetIndex, setSelectedSheetIndex] = useState(0);
+            const [workbook, setWorkbook] = useState(null);
+            
+            const fileInputRef = useRef(null);
+            
+            // 处理文件拖放
+            const handleDragOver = (e) => {
+                e.preventDefault();
+                setIsDragging(true);
+            };
+            
+            const handleDragLeave = (e) => {
+                e.preventDefault();
+                setIsDragging(false);
+            };
+            
+            const handleDrop = (e) => {
+                e.preventDefault();
+                setIsDragging(false);
+                
+                const droppedFile = e.dataTransfer.files[0];
+                if (droppedFile) {
+                    handleFileSelect(droppedFile);
+                }
+            };
+            
+            // 处理文件选择
+            const handleFileSelect = (selectedFile) => {
+                // 验证文件类型
+                const validTypes = [
+                    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'application/vnd.ms-excel',
+                    'text/csv',
+                    'application/vnd.oasis.opendocument.spreadsheet'
+                ];
+                
+                if (!validTypes.includes(selectedFile.type) && 
+                    !selectedFile.name.match(/\.(xlsx|xls|csv|ods)$/i)) {
+                    setStatus('error');
+                    setErrorMessage('请上传有效的Excel文件 (xlsx, xls, csv, ods)');
+                    return;
+                }
+                
+                setFile(selectedFile);
+                setStatus('文件已上传');
+                setErrorMessage('');
+                
+                // 读取Excel文件并解析所有Sheet
+                readExcelSheets(selectedFile);
+            };
+            
+            // 读取Excel文件的所有Sheet
+            const readExcelSheets = (excelFile) => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const wb = XLSX.read(data, { type: 'array' });
+                        setWorkbook(wb);
+                        
+                        const sheetNames = wb.SheetNames;
+                        const sheetDataList = [];
+                        
+                        // 限制最多预览10个Sheet，避免性能问题
+                        const maxSheetsToPreview = Math.min(sheetNames.length, 10);
+                        
+                        for (let i = 0; i < maxSheetsToPreview; i++) {
+                            const sheetName = sheetNames[i];
+                            const worksheet = wb.Sheets[sheetName];
+                            
+                            // 将工作表数据转换为JSON数组
+                            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                            
+                            // 计算行数和列数
+                            let rowCount = jsonData.length;
+                            let colCount = 0;
+                            if (rowCount > 0) {
+                                // 找出最大列数
+                                colCount = jsonData.reduce((max, row) => Math.max(max, row.length), 0);
+                            }
+                            
+                            // 如果数据为空，行数设为0（不包括表头）
+                            const dataRowCount = Math.max(0, rowCount - 1);
+                            
+                            sheetDataList.push({
+                                name: sheetName,
+                                data: jsonData,
+                                rows: dataRowCount,
+                                cols: colCount,
+                                index: i
+                            });
+                        }
+                        
+                        setSheets(sheetDataList);
+                        
+                        if (sheetDataList.length > 0) {
+                            setSelectedSheetIndex(0);
+                            setStatus('请选择要拆分的Sheet');
+                        } else {
+                            setStatus('error');
+                            setErrorMessage('Excel文件中没有找到有效的Sheet');
+                        }
+                        
+                    } catch (error) {
+                        setStatus('error');
+                        setErrorMessage('解析Excel文件时出错: ' + error.message);
+                    }
+                };
+                
+                reader.onerror = function() {
+                    setStatus('error');
+                    setErrorMessage('读取文件时出错');
+                };
+                
+                reader.readAsArrayBuffer(excelFile);
+            };
+            
+            // 处理文件输入变化
+            const handleFileInputChange = (e) => {
+                const selectedFile = e.target.files[0];
+                if (selectedFile) {
+                    handleFileSelect(selectedFile);
+                }
+            };
+            
+            // 触发文件选择
+            const triggerFileInput = () => {
+                fileInputRef.current.click();
+            };
+            
+            // 选择Sheet
+            const selectSheet = (index) => {
+                setSelectedSheetIndex(index);
+            };
+            
+            // 处理拆分Excel
+            const handleSplitExcel = async () => {
+                if (!file || !workbook) {
+                    setStatus('error');
+                    setErrorMessage('请先上传Excel文件');
+                    return;
+                }
+                
+                if (sheets.length === 0) {
+                    setStatus('error');
+                    setErrorMessage('没有可用的Sheet');
+                    return;
+                }
+                
+                if (maxRows < 1) {
+                    setStatus('error');
+                    setErrorMessage('每表最大行数必须大于0');
+                    return;
+                }
+                
+                setIsProcessing(true);
+                setStatus('processing');
+                setProgress(0);
+                setErrorMessage('');
+                
+                try {
+                    const selectedSheet = sheets[selectedSheetIndex];
+                    const sheetName = selectedSheet.name;
+                    
+                    // 获取选中的工作表
+                    const worksheet = workbook.Sheets[sheetName];
+                    
+                    // 将工作表数据转换为JSON数组
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    
+                    // 获取表头（第一行）
+                    const headers = jsonData[0] || [];
+                    
+                    // 获取数据行（除表头外的所有行）
+                    const dataRows = jsonData.slice(1);
+                    const totalRows = dataRows.length;
+                    
+                    // 计算需要拆分的表格数量
+                    const tablesCount = Math.ceil(totalRows / maxRows);
+                    
+                    setProgress(20);
+                    
+                    // 创建ZIP文件
+                    const zip = new JSZip();
+                    
+                    // 获取当前日期
+                    const today = new Date();
+                    const dateStr = today.getFullYear().toString() + 
+                                  (today.getMonth() + 1).toString().padStart(2, '0') + 
+                                  today.getDate().toString().padStart(2, '0');
+                    
+                    // 拆分并创建多个Excel文件
+                    for (let i = 0; i < tablesCount; i++) {
+                        const startRow = i * maxRows;
+                        const endRow = Math.min(startRow + maxRows, totalRows);
+                        const currentRows = dataRows.slice(startRow, endRow);
+                        
+                        // 创建新的工作表数据（包含表头）
+                        const newSheetData = [headers, ...currentRows];
+                        
+                        // 创建新的工作表
+                        const newWorksheet = XLSX.utils.aoa_to_sheet(newSheetData);
+                        
+                        // 创建新的工作簿
+                        const newWorkbook = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
+                        
+                        // 将工作簿转换为二进制数据
+                        const wbout = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' });
+                        
+                        // 添加到ZIP
+                        const fileName = `表格拆分-${dateStr}-${sheetName}-第${i+1}个-共${currentRows.length+1}行.xlsx`;
+                        zip.file(fileName, wbout);
+                        
+                        // 更新进度
+                        setProgress(20 + Math.floor((i + 1) / tablesCount * 70));
+                    }
+                    
+                    setProgress(95);
+                    
+                    // 生成ZIP文件并触发下载
+                    zip.generateAsync({ type: 'blob' })
+                        .then(function(content) {
+                            // 保存文件
+                            saveAs(content, `表格拆分-${dateStr}-${sheetName}.zip`);
+                            
+                            // 更新状态
+                            setProgress(100);
+                            setStatus('completed');
+                            setIsProcessing(false);
+                            
+                            // 设置结果信息
+                            setResultInfo({
+                                originalFile: file.name,
+                                sheetName: sheetName,
+                                tablesCount: tablesCount,
+                                totalRows: totalRows,
+                                maxRows: maxRows,
+                                date: dateStr
+                            });
+                            
+                            // 显示成功动画
+                            setShowSuccessAnimation(true);
+                        })
+                        .catch(function(error) {
+                            setStatus('error');
+                            setErrorMessage('生成压缩包时出错: ' + error.message);
+                            setIsProcessing(false);
+                        });
+                        
+                } catch (error) {
+                    setStatus('error');
+                    setErrorMessage('处理Excel文件时出错: ' + error.message);
+                    setIsProcessing(false);
+                }
+            };
+            
+            // 重置状态
+            const handleReset = () => {
+                setFile(null);
+                setStatus('等待上传文件');
+                setProgress(0);
+                setResultInfo(null);
+                setErrorMessage('');
+                setSheets([]);
+                setSelectedSheetIndex(0);
+                setWorkbook(null);
+                if (fileInputRef.current) {
+                    fileInputRef.current.value = '';
+                }
+            };
+            
+            // 关闭成功动画
+            const closeSuccessAnimation = () => {
+                setShowSuccessAnimation(false);
+            };
+            
+            // 渲染状态指示器
+            const renderStatusIndicator = () => {
+                switch(status) {
+                    case '等待上传文件':
+                        return <div className="flex items-center text-blue-400">
+                            <div className="w-3 h-3 rounded-full bg-blue-400 mr-2"></div>
+                            <span>等待上传文件</span>
+                        </div>;
+                    case '文件已上传':
+                    case '请选择要拆分的Sheet':
+                        return <div className="flex items-center text-green-400">
+                            <div className="w-3 h-3 rounded-full bg-green-400 mr-2"></div>
+                            <span>{status}: {file?.name}</span>
+                        </div>;
+                    case 'processing':
+                        return <div className="flex items-center text-yellow-400">
+                            <div className="w-3 h-3 rounded-full bg-yellow-400 mr-2 pulse"></div>
+                            <span>正在处理中...</span>
+                        </div>;
+                    case 'completed':
+                        return <div className="flex items-center text-green-400">
+                            <div className="w-3 h-3 rounded-full bg-green-400 mr-2"></div>
+                            <span>处理完成！</span>
+                        </div>;
+                    case 'error':
+                        return <div className="flex items-center text-red-400">
+                            <div className="w-3 h-3 rounded-full bg-red-400 mr-2"></div>
+                            <span>处理出错</span>
+                        </div>;
+                    default:
+                        return null;
+                }
+            };
+            
+            return (
+                <div className="space-y-8">
+                    {/* 新年成功动画 */}
+                    {showSuccessAnimation && (
+                        <SuccessAnimation onClose={closeSuccessAnimation} />
+                    )}
+                    
+                    {/* 标题 */}
+                    <div className="text-center">
+                        <h1 className="text-3xl md:text-4xl font-bold text-white mb-2">Excel智能拆分工具</h1>
+                        <p className="text-gray-200">支持多Sheet选择预览，按指定行数拆分Excel文件</p>
+                    </div>
+                    
+                    {/* 主卡片 */}
+                    <div className="glass-dark p-6 md:p-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* 左侧：上传区域 */}
+                            <div className="lg:col-span-2">
+                                <div 
+                                    className={`drop-zone p-8 rounded-2xl text-center cursor-pointer transition-all duration-300 ${isDragging ? 'dragover' : ''} ${file ? 'bg-slate-800/30' : 'glass'}`}
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    onClick={triggerFileInput}
+                                >
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef}
+                                        className="hidden" 
+                                        accept=".xlsx,.xls,.csv,.ods"
+                                        onChange={handleFileInputChange}
+                                    />
+                                    
+                                    <div className="mb-6">
+                                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 mb-4">
+                                            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                            </svg>
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white mb-2">上传Excel文件</h3>
+                                        <p className="text-gray-300 mb-4">拖放文件到此处或点击选择文件</p>
+                                        <p className="text-sm text-gray-400">支持 .xlsx, .xls, .csv, .ods 格式</p>
+                                    </div>
+                                    
+                                    {file && (
+                                        <div className="mt-6 p-4 bg-slate-800/50 rounded-xl">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center">
+                                                    <svg className="w-6 h-6 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                                    </svg>
+                                                    <div>
+                                                        <p className="font-medium text-white">{file.name}</p>
+                                                        <p className="text-sm text-gray-300">{(file.size / 1024).toFixed(2)} KB</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); handleReset(); }}
+                                                    className="p-2 text-gray-400 hover:text-white transition-colors"
+                                                >
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                                                    </svg>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Sheet选择区域 */}
+                                {sheets.length > 0 && (
+                                    <div className="mt-8 glass p-6 rounded-2xl">
+                                        <h3 className="text-lg font-bold text-white mb-4">选择要拆分的Sheet</h3>
+                                        
+                                        <div className="sheet-tabs">
+                                            {sheets.map((sheet, index) => (
+                                                <div 
+                                                    key={index}
+                                                    className={`sheet-tab ${selectedSheetIndex === index ? 'active' : ''}`}
+                                                    onClick={() => selectSheet(index)}
+                                                >
+                                                    {sheet.name} ({sheet.rows}行)
+                                                </div>
+                                            ))}
+                                        </div>
+                                        
+                                        {/* Sheet预览 */}
+                                        {sheets[selectedSheetIndex] && (
+                                            <SheetPreview 
+                                                sheetData={sheets[selectedSheetIndex].data}
+                                                sheetName={sheets[selectedSheetIndex].name}
+                                                rowCount={sheets[selectedSheetIndex].rows}
+                                                colCount={sheets[selectedSheetIndex].cols}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* 右侧：配置区域 */}
+                            <div className="space-y-6">
+                                <div className="glass p-5 rounded-2xl">
+                                    <h3 className="text-lg font-bold text-white mb-4">拆分配置</h3>
+                                    
+                                    <div className="space-y-5">
+                                        <div>
+                                            <label className="block text-gray-300 mb-2">每表最大数据行数</label>
+                                            <div className="flex items-center">
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="100000"
+                                                    value={maxRows}
+                                                    onChange={(e) => setMaxRows(parseInt(e.target.value) || 1000)}
+                                                    className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <p className="text-sm text-gray-400 mt-1">包括表头，每个拆分后的表格最多包含的行数</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-gray-300 mb-2">并发处理数</label>
+                                            <div className="flex items-center">
+                                                <input 
+                                                    type="number" 
+                                                    min="1" 
+                                                    max="50"
+                                                    value={concurrency}
+                                                    onChange={(e) => setConcurrency(parseInt(e.target.value) || 10)}
+                                                    className="w-full p-3 bg-slate-800/50 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            </div>
+                                            <p className="text-sm text-gray-400 mt-1">同时处理的任务数量，默认为10</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* 状态显示 */}
+                                <div className="glass p-5 rounded-2xl">
+                                    <h3 className="text-lg font-bold text-white mb-4">处理状态</h3>
+                                    
+                                    <div className="space-y-4">
+                                        <div>
+                                            {renderStatusIndicator()}
+                                        </div>
+                                        
+                                        {errorMessage && (
+                                            <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-lg">
+                                                <p className="text-red-300 text-sm">{errorMessage}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {/* 进度条 */}
+                                        {isProcessing && (
+                                            <div>
+                                                <div className="flex justify-between text-sm text-gray-300 mb-1">
+                                                    <span>处理进度</span>
+                                                    <span>{progress}%</span>
+                                                </div>
+                                                <div className="progress-bar">
+                                                    <div className="progress-fill" style={{ width: `${progress}%` }}></div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {/* 结果信息 */}
+                                        {resultInfo && (
+                                            <div className="p-3 bg-green-900/20 border border-green-700/30 rounded-lg">
+                                                <h4 className="font-medium text-green-300 mb-2">拆分完成</h4>
+                                                <div className="text-sm space-y-1">
+                                                    <p className="text-gray-300">原文件: <span className="text-white">{resultInfo.originalFile}</span></p>
+                                                    <p className="text-gray-300">Sheet名称: <span className="text-white">{resultInfo.sheetName}</span></p>
+                                                    <p className="text-gray-300">总数据行数: <span className="text-white">{resultInfo.totalRows} 行</span></p>
+                                                    <p className="text-gray-300">拆分数量: <span className="text-white">{resultInfo.tablesCount} 个文件</span></p>
+                                                    <p className="text-gray-300">每表最多: <span className="text-white">{resultInfo.maxRows} 行</span></p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* 操作按钮 */}
+                        <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+                            <button 
+                                onClick={handleSplitExcel}
+                                disabled={!file || isProcessing || sheets.length === 0}
+                                className={`px-8 py-3 rounded-xl font-bold text-white transition-all flex items-center justify-center ${!file || isProcessing || sheets.length === 0 ? 'bg-gray-700 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg'}`}
+                            >
+                                {isProcessing ? (
+                                    <>
+                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        处理中...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                        </svg>
+                                        一键拆分
+                                    </>
+                                )}
+                            </button>
+                            
+                            <button 
+                                onClick={handleReset}
+                                className="px-8 py-3 rounded-xl font-bold text-white bg-gray-800 hover:bg-gray-700 transition-all border border-gray-700 flex items-center justify-center"
+                            >
+                                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                重置
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* 使用说明 */}
+                    <div className="glass-dark p-6 rounded-2xl">
+                        <h3 className="text-xl font-bold text-white mb-4">使用说明</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="p-4 bg-slate-800/30 rounded-xl">
+                                <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center mb-3">
+                                    <span className="text-blue-400 font-bold">1</span>
+                                </div>
+                                <h4 className="font-bold text-white mb-2">上传Excel文件</h4>
+                                <p className="text-gray-300 text-sm">拖放或点击选择您的Excel文件，支持多Sheet文件</p>
+                            </div>
+                            <div className="p-4 bg-slate-800/30 rounded-xl">
+                                <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center mb-3">
+                                    <span className="text-purple-400 font-bold">2</span>
+                                </div>
+                                <h4 className="font-bold text-white mb-2">选择Sheet</h4>
+                                <p className="text-gray-300 text-sm">预览不同Sheet的内容，选择要拆分的Sheet</p>
+                            </div>
+                            <div className="p-4 bg-slate-800/30 rounded-xl">
+                                <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center mb-3">
+                                    <span className="text-yellow-400 font-bold">3</span>
+                                </div>
+                                <h4 className="font-bold text-white mb-2">配置拆分参数</h4>
+                                <p className="text-gray-300 text-sm">设置每个拆分表格的最大行数（包括表头）</p>
+                            </div>
+                            <div className="p-4 bg-slate-800/30 rounded-xl">
+                                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center mb-3">
+                                    <span className="text-green-400 font-bold">4</span>
+                                </div>
+                                <h4 className="font-bold text-white mb-2">下载拆分结果</h4>
+                                <p className="text-gray-300 text-sm">一键拆分并下载ZIP压缩包，包含所有拆分后的文件</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* 页脚 */}
+                    <div className="text-center text-gray-400 text-sm pt-4">
+                        <p>Excel拆分工具 - 支持多Sheet选择预览，使用SheetJS实现</p>
+                        <p className="mt-1">文件处理完全在本地进行，不会上传到任何服务器</p>
+                    </div>
+                </div>
+            );
+        }
+        
+        // 渲染React应用
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
